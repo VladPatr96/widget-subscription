@@ -4,7 +4,7 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 
 ## Repository binding
 
-This repository currently has no GitHub remote. Configure a GitHub remote before using the commands below. Once configured, `gh` infers the repository from `git remote -v`.
+This repository is bound to the GitHub remote `origin` (`VladPatr96/widget-subscription`). `gh` infers the repository from `git remote -v`.
 
 ## Conventions
 
