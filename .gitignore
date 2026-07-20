@@ -1,2 +1,9 @@
 # Harness working state
 .data/
+
+# .NET build output
+[Bb]in/
+[Oo]bj/
+
+# Local SDK install (not part of the repo)
+.dotnet-sdk/

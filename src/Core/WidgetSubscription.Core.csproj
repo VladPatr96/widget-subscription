@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Shared props (TargetFramework, Nullable, ImplicitUsings, TreatWarningsAsErrors)
+       come from Directory.Build.props. Assembly/root namespace default to the file name
+       (WidgetSubscription.Core). Core is deliberately dependency-free: no UI, HTTP,
+       files, or OAuth. -->
+
+</Project>

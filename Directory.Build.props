@@ -1,0 +1,12 @@
+<Project>
+
+  <!-- Shared defaults for every project in the solution. Project-specific settings
+       (OutputType, package references, etc.) live in each .csproj. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>
