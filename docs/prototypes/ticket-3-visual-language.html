@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — throwaway. Тикет #3: визуальный язык трей-иконки и панели.
+  Mock-данные, стек-агностично. Цель — реагировать на форму и читаемость,
+  НЕ фиксировать стек. Открыть файл в браузере. Удалить/впитать после решения.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE — трей-виджет лимитов (тикет #3)</title>
+<style>
+  :root{
+    --ok:#2ea043; --warn:#d29922; --crit:#e5484d; --exhausted:#8b1a1f;
+    --bg:#0d1117; --panel:#161b22; --ink:#e6edf3; --muted:#8b949e; --line:#30363d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.45 "Segoe UI",system-ui,sans-serif;padding:28px}
+  h1{font-size:18px;margin:0 0 4px}
+  h2{font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);
+    margin:34px 0 12px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .sub{color:var(--muted);margin:0 0 8px;max-width:70ch}
+  .cols{display:flex;gap:40px;flex-wrap:wrap;align-items:flex-start}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .cap{font-size:12px;color:var(--muted);margin:0 0 10px}
+
+  /* ---- Трей-иконки: реальный размер (16px) + увеличенный дубль ---- */
+  .iconrow{display:flex;gap:28px;flex-wrap:wrap}
+  .icouna{display:flex;flex-direction:column;align-items:center;gap:8px;width:150px;text-align:center}
+  .real{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+  .zoom{transform-origin:top center}
+  .iname{font-weight:600}
+  .idesc{font-size:12px;color:var(--muted)}
+
+  svg{display:block}
+
+  /* ---- Панель ---- */
+  .win{width:300px;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);overflow:hidden}
+  .win h3{margin:0;padding:12px 14px;font-size:13px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center}
+  .win h3 .prov{color:var(--muted);font-weight:400;font-size:12px}
+  .rows{padding:6px 14px 12px}
+  .lim{padding:10px 0;border-bottom:1px solid var(--line)}
+  .lim:last-child{border-bottom:0}
+  .lim .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .lim .nm{font-weight:600}
+  .lim .hr{font-variant-numeric:tabular-nums;font-weight:700}
+  .bar{height:8px;border-radius:5px;background:#21262d;overflow:hidden}
+  .bar > i{display:block;height:100%;border-radius:5px}
+  .meta{display:flex;justify-content:space-between;margin-top:5px;font-size:12px;color:var(--muted)}
+  .badge{font-size:11px;padding:1px 7px;border-radius:20px;font-weight:600}
+  .b-ok{background:rgba(46,160,67,.15);color:#3fb950}
+  .b-warn{background:rgba(210,153,34,.15);color:#d29922}
+  .b-crit{background:rgba(229,72,77,.15);color:#ff7b72}
+  .foot{padding:8px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);
+    display:flex;justify-content:space-between}
+  .dotlegend{display:flex;gap:18px;margin:6px 0 0;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .dotlegend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:10px;height:10px;border-radius:50%}
+</style>
+</head>
+<body>
+  <h1>Прототип визуального языка — трей-виджет лимитов Claude Code</h1>
+  <p class="sub">PROTOTYPE / throwaway. Mock-данные, стек не фиксируем. Вопрос тикета #3:
+    как виджет читается «с одного взгляда» (иконка в трее) и что показывает при раскрытии (панель).
+    Headroom = остаток % (100 − использовано). Три лимита: 5-часовой, недельный общий, Fable 5.</p>
+  <div class="card" style="border-color:#2ea043;margin:14px 0 4px">
+    <div class="cap" style="color:#3fb950;font-weight:700;margin:0 0 8px">ВЕРДИКТ (тикет #3, зафиксировано)</div>
+    <div>Иконка — <b>Донат</b> (дуга = худший headroom + цвет), кодирует худший из трёх лимитов.
+      Пороги: <b>ок &gt;30% · близко 10–30% · критично &lt;10% · исчерпан 0%</b>.
+      Панель — три бара (5-часовой / недельный / Fable 5): headroom %, бейдж состояния.
+      Сброс — относительно основным + абсолютное время подсказкой (tooltip, наведи на строку сброса).
+      Исчерпан — 0% + бейдж «исчерпан» + «сброс через N».</div>
+  </div>
+  <p class="dotlegend">
+    <span><i class="sw" style="background:var(--ok)"></i>ок (headroom &gt; 30%)</span>
+    <span><i class="sw" style="background:var(--warn)"></i>близко (10–30%)</span>
+    <span><i class="sw" style="background:var(--crit)"></i>критично (&lt; 10%)</span>
+    <span><i class="sw" style="background:var(--exhausted)"></i>исчерпан (0%)</span>
+  </p>
+
+  <h2>A. Трей-иконка — кодирует ХУДШИЙ из трёх лимитов</h2>
+  <p class="cap">16×16 — реальный размер в трее; ниже — увеличено ×5 для оценки формы.
+    Три трактовки на выбор. Каждая раскрашена по наименьшему headroom среди трёх лимитов.</p>
+  <div class="iconrow" id="icons"></div>
+
+  <h2>B. Раскрывающаяся панель — три бара</h2>
+  <p class="cap">Три сценария mock-данных. Каждый бар: имя лимита, headroom %, время до сброса,
+    состояние. Показ «исчерпан → до сброса N» и «сброшено».</p>
+  <div class="cols" id="panels"></div>
+
+<script>
+// ---------- mock-данные (три сценария) ----------
+const SC = {
+  healthy: { name:"Всё ок", limits:[
+    {nm:"5-часовой",       hr:85, reset:"через 2 ч 40 мин", abs:"сегодня 17:00"},
+    {nm:"Недельный общий", hr:98, reset:"через 6 дн",       abs:"Пт 06:59"},
+    {nm:"Fable 5",         hr:98, reset:"через 6 дн",       abs:"Пт 06:59"},
+  ]},
+  near: { name:"Один близко", limits:[
+    {nm:"5-часовой",       hr:12, reset:"через 48 мин",     abs:"сегодня 15:00"},
+    {nm:"Недельный общий", hr:60, reset:"через 4 дн",       abs:"Пт 06:59"},
+    {nm:"Fable 5",         hr:34, reset:"через 4 дн",       abs:"Пт 06:59"},
+  ]},
+  spent: { name:"Один исчерпан", limits:[
+    {nm:"5-часовой",       hr:0,  reset:"сброс через 2 ч 14 мин", abs:"сегодня 16:30", exhausted:true},
+    {nm:"Недельный общий", hr:41, reset:"через 3 дн",       abs:"Пт 06:59"},
+    {nm:"Fable 5",         hr:4,  reset:"через 3 дн",        abs:"Пт 06:59"},
+  ]},
+};
+
+function state(hr){ return hr<=0?"exhausted":hr<10?"crit":hr<=30?"warn":"ok"; }
+function color(s){ return {ok:"var(--ok)",warn:"var(--warn)",crit:"var(--crit)",exhausted:"var(--exhausted)"}[s]; }
+function worst(limits){ return Math.min(...limits.map(l=>l.hr)); }
+function badge(s){ return s==="ok"?["b-ok","ок"]:s==="warn"?["b-warn","близко"]:s==="crit"?["b-crit","критично"]:["b-crit","исчерпан"]; }
+
+// ---------- иконки ----------
+// worst headroom для каждого сценария управляет цветом иконки
+function iconDot(hr){ // трактовка 1: сплошная точка/кольцо
+  const c=color(state(hr));
+  return `<svg width="16" height="16" viewBox="0 0 16 16">
+    <rect width="16" height="16" rx="3" fill="#161b22"/>
+    <circle cx="8" cy="8" r="4.5" fill="${c}"/></svg>`;
+}
+function iconDonut(hr){ // трактовка 2: мини-донат, дуга = худший headroom
+  const c=color(state(hr)), R=6, C=2*Math.PI*R, on=C*hr/100;
+  return `<svg width="16" height="16" viewBox="0 0 16 16">
+    <rect width="16" height="16" rx="3" fill="#161b22"/>
+    <circle cx="8" cy="8" r="${R}" fill="none" stroke="#30363d" stroke-width="2.5"/>
+    <circle cx="8" cy="8" r="${R}" fill="none" stroke="${c}" stroke-width="2.5"
+      stroke-dasharray="${on} ${C-on}" stroke-linecap="round" transform="rotate(-90 8 8)"/></svg>`;
+}
+function iconNum(hr){ // трактовка 3: цифра худшего headroom на цветном фоне
+  const c=color(state(hr));
+  return `<svg width="16" height="16" viewBox="0 0 16 16">
+    <rect width="16" height="16" rx="3" fill="${c}"/>
+    <text x="8" y="11.5" text-anchor="middle" font-size="9" font-weight="700"
+      font-family="Segoe UI,sans-serif" fill="#0d1117">${hr}</text></svg>`;
+}
+
+const iconDefs=[
+  {fn:iconDot,   name:"1. Точка",  desc:"цвет = худший лимит. Проще всего, без числа."},
+  {fn:iconDonut, name:"2. Донат",  desc:"дуга = худший headroom + цвет. Показывает «сколько»."},
+  {fn:iconNum,   name:"3. Цифра",  desc:"число худшего headroom + цвет фона. Точное значение."},
+];
+const worstHealthy=worst(SC.healthy.limits), worstNear=worst(SC.near.limits), worstSpent=worst(SC.spent.limits);
+const iconsEl=document.getElementById("icons");
+iconDefs.forEach(d=>{
+  iconsEl.insertAdjacentHTML("beforeend",`
+    <div class="icouna">
+      <div class="iname">${d.name}</div>
+      <div class="real">16px: ${d.fn(worstHealthy)} ${d.fn(worstNear)} ${d.fn(worstSpent)}</div>
+      <div class="zoom" style="transform:scale(5)">${d.fn(worstNear)}</div>
+      <div class="idesc" style="margin-top:56px">${d.desc}</div>
+    </div>`);
+});
+
+// ---------- панели ----------
+function panel(sc){
+  const rows=sc.limits.map(l=>{
+    const s=state(l.hr), c=color(s), [bc,bt]=badge(s);
+    return `<div class="lim">
+      <div class="top"><span class="nm">${l.nm}</span>
+        <span class="hr" style="color:${c}">${l.exhausted?"0%":l.hr+"%"}</span></div>
+      <div class="bar"><i style="width:${Math.max(l.hr,2)}%;background:${c}"></i></div>
+      <div class="meta"><span title="сброс: ${l.abs}" style="text-decoration:underline dotted;cursor:help">${l.reset}</span><span class="badge ${bc}">${bt}</span></div>
+    </div>`;
+  }).join("");
+  return `<div class="icouna" style="width:auto">
+    <div class="cap">Сценарий: <b>${sc.name}</b></div>
+    <div class="win">
+      <h3>Лимиты подписки <span class="prov">Claude Code</span></h3>
+      <div class="rows">${rows}</div>
+      <div class="foot"><span>обновлено 12 с назад</span><span>Обновить ⟳</span></div>
+    </div></div>`;
+}
+const panelsEl=document.getElementById("panels");
+[SC.healthy,SC.near,SC.spent].forEach(sc=>panelsEl.insertAdjacentHTML("beforeend",panel(sc)));
+</script>
+</body>
+</html>
