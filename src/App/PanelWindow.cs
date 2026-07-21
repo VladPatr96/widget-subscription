@@ -30,6 +30,7 @@ public sealed class PanelWindow : Window
         ShowInTaskbar = false;
         CanResize = false;
         Topmost = true;
+        WindowStartupLocation = WindowStartupLocation.Manual;
         Title = "Widget Subscription";
         Background = SolidColorBrush.Parse("#161b22");
 
@@ -43,6 +44,44 @@ public sealed class PanelWindow : Window
             Spacing = 12,
             Children = { _header, _rows, _footer },
         };
+
+        // SizeToContent.Height resolves the final height on a later layout pass; re-pin then so the
+        // bottom edge stays anchored (Bounds is stale at OnOpened/Update time).
+        SizeChanged += (_, _) => RepositionIfVisible();
+    }
+
+    /// <summary>
+    /// Anchor the panel to the primary screen's notification-area corner (bottom-right of the
+    /// working area, i.e. above the taskbar). Avalonia's <see cref="TrayIcon"/> exposes no screen
+    /// coordinates, so this is the closest reliable anchor to the actual tray icon.
+    /// </summary>
+    private void PositionBottomRight()
+    {
+        var screen = Screens.Primary;
+        if (screen is null)
+            return;
+
+        var area = screen.WorkingArea;
+        var scale = screen.Scaling;
+        var margin = (int)Math.Round(8 * scale);
+        var width = (int)Math.Ceiling(Bounds.Width * scale);
+        var height = (int)Math.Ceiling(Bounds.Height * scale);
+
+        Position = new PixelPoint(
+            area.X + area.Width - width - margin,
+            area.Y + area.Height - height - margin);
+    }
+
+    private void RepositionIfVisible()
+    {
+        if (IsVisible)
+            PositionBottomRight();
+    }
+
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        PositionBottomRight();
     }
 
     public void Update(PanelView view)
@@ -60,6 +99,8 @@ public sealed class PanelWindow : Window
             _ => string.Empty,
         };
         _footer.IsVisible = !string.IsNullOrEmpty(_footer.Text);
+
+        RepositionIfVisible();
     }
 
     private static Control BuildRow(LimitView limit)
