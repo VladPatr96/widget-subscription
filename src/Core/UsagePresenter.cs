@@ -36,7 +36,8 @@ public sealed record PanelView(
     string? DegradedReason,
     bool IsStale,
     TimeSpan? Age,
-    string? AgeText);
+    string? AgeText,
+    string TooltipText);
 
 /// <summary>
 /// Pure mapping from <see cref="UsageState"/> to the view model the UI paints (spec #3). No UI,
@@ -69,6 +70,7 @@ public static class UsagePresenter
             IsDegraded: state.IsDegraded);
 
         var ageText = state.IsStale && state.Age is { } age ? FormatAge(age) : null;
+        var tooltip = BuildTooltip(state.Provider, worst, limits.Length, state.IsDegraded);
 
         return new PanelView(
             Provider: state.Provider,
@@ -78,7 +80,8 @@ public static class UsagePresenter
             DegradedReason: state.IsDegraded ? state.Error?.Message : null,
             IsStale: state.IsStale,
             Age: state.Age,
-            AgeText: ageText);
+            AgeText: ageText,
+            TooltipText: tooltip);
     }
 
     private static LimitView MapLimit(Limit limit, DateTimeOffset now)
@@ -149,5 +152,19 @@ public static class UsagePresenter
         if (age.TotalHours < 1)
             return $"данные {(int)age.TotalMinutes} мин назад";
         return $"данные {(int)age.TotalHours} ч назад";
+    }
+
+    /// <summary>
+    /// Hover text for the tray icon — the at-a-glance summary that mirrors the donut arc: the
+    /// provider name and the worst-of-three headroom. Per-limit detail lives in the click-to-open
+    /// panel (spec §1's two-tier disclosure), not here. Degrades to a "нет данных" line.
+    /// </summary>
+    private static string BuildTooltip(ProviderInfo provider, double worstHeadroom, int limitCount, bool degraded)
+    {
+        if (degraded)
+            return $"{provider.DisplayName}: нет данных";
+        if (limitCount > 0)
+            return $"{provider.DisplayName}: {(int)Math.Round(worstHeadroom)}% свободно";
+        return provider.DisplayName;
     }
 }

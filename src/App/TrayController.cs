@@ -44,17 +44,8 @@ public sealed class TrayController : IDisposable
     {
         var view = UsagePresenter.Map(_monitor.Current);
         _tray.Icon = TrayIconRenderer.RenderIcon(view.Icon);
-        _tray.ToolTipText = Tooltip(view);
+        _tray.ToolTipText = view.TooltipText;
         _panel?.Update(view);
-    }
-
-    private static string Tooltip(PanelView view)
-    {
-        if (view.IsDegraded)
-            return $"{view.Provider.DisplayName}: нет данных";
-        if (!view.Icon.IsDegraded && view.Limits.Count > 0)
-            return $"{view.Provider.DisplayName}: {(int)Math.Round(view.Icon.WorstHeadroom)}% свободно";
-        return view.Provider.DisplayName;
     }
 
     private void TogglePanel()

@@ -161,6 +161,32 @@ public class UsagePresenterTests
         Assert.Equal("данные 2 мин назад", panel.AgeText);
     }
 
+    [Fact]
+    public void Tooltip_summarizes_the_worst_of_three_headroom()
+    {
+        var panel = UsagePresenter.Map(StateWith(
+            Limit(LimitKind.Session, 59),
+            Limit(LimitKind.WeeklyAll, 88),
+            Limit(LimitKind.WeeklyScoped, 91)));
+
+        // Mirrors the donut arc (worst-of-three), not per-limit detail — that lives in the panel.
+        Assert.Equal("Claude Code: 59% свободно", panel.TooltipText);
+    }
+
+    [Fact]
+    public void Tooltip_on_total_failure_says_no_data()
+    {
+        var state = new UsageState(
+            Provider,
+            Snapshot: null,
+            Error: new FetchError(FetchErrorKind.NoCredentials, "Нет учётных данных"),
+            FetchedAt: null,
+            Now: Now,
+            StaleAfter: TimeSpan.FromSeconds(90));
+
+        Assert.Equal("Claude Code: нет данных", UsagePresenter.Map(state).TooltipText);
+    }
+
     // --- helpers ---------------------------------------------------------
 
     private static Limit Limit(LimitKind kind, double headroom)
