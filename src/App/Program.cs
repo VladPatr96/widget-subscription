@@ -14,6 +14,12 @@ internal static class Program
         if (args.Contains("--selftest"))
             return SelfTest.RunAsync().GetAwaiter().GetResult();
 
+        // One widget per user: a second instance would double the poll rate against the shared
+        // usage endpoint and invite HTTP 429 rate-limits, so bail if we are not the first.
+        using var single = new System.Threading.Mutex(initiallyOwned: true, @"Local\WidgetSubscription.SingleInstance", out var isFirst);
+        if (!isFirst)
+            return 0;
+
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         return 0;
     }

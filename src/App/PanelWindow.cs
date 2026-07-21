@@ -1,91 +1,158 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 using WidgetSubscription.Core;
 
 namespace WidgetSubscription.App;
 
 /// <summary>
-/// The click-to-open panel (spec #3): three bars (headroom %, badge, reset countdown), the
-/// provider name, and a footer that shows the degradation reason or the stale-data age. Built in
-/// code so it can redraw straight from a <see cref="PanelView"/>; all thresholds/colors/texts
-/// come pre-computed from <see cref="UsagePresenter"/>.
+/// The floating desktop widget: a frameless, always-on-top window the user drags anywhere within
+/// the screen's working area. It has two states — collapsed to a donut icon, or expanded to the
+/// full three-bar panel (spec #3) — toggled by clicking the collapsed icon or the header button.
+/// Right-click opens an Avalonia <see cref="ContextMenu"/> (correctly positioned at the cursor,
+/// unlike the native tray popup) with collapse/expand and exit. All thresholds/colors/texts come
+/// pre-computed from <see cref="UsagePresenter"/>; this class only lays them out and owns window
+/// behaviour (drag, clamp-to-screen, state toggle).
 /// </summary>
 public sealed class PanelWindow : Window
 {
+    private const int CollapsedSize = 56;
+    private const int ExpandedWidth = 300;
+    private const double DragThreshold = 4;
+
     private static readonly IBrush Ink = Brushes.White;
     private static readonly IBrush Muted = SolidColorBrush.Parse("#8b949e");
     private static readonly IBrush TrackBrush = SolidColorBrush.Parse("#21262d");
+    private static readonly IBrush Surface = SolidColorBrush.Parse("#161b22");
+    private static readonly IBrush Edge = SolidColorBrush.Parse("#30363d");
 
+    private readonly Image _iconImage;
+    private readonly Border _collapsedView;
+    private readonly Border _expandedView;
     private readonly TextBlock _header;
     private readonly StackPanel _rows;
     private readonly TextBlock _footer;
 
+    private Bitmap? _iconBitmap;
+    private bool _collapsed = true;
+    private bool _positioned;
+
+    // Manual drag state — lets us distinguish a click (expand) from a drag (move) on the same
+    // surface, which BeginMoveDrag cannot do because it swallows the click.
+    private bool _pointerDown;
+    private bool _dragging;
+    private PixelPoint _pressPointer;
+    private PixelPoint _pressWindow;
+
+    /// <summary>Raised when the user picks "Выход" from the context menu.</summary>
+    public event EventHandler? ExitRequested;
+
+    /// <summary>Raised when the widget expands, so the owner can force a fresh fetch (spec #5).</summary>
+    public event EventHandler? RefreshRequested;
+
     public PanelWindow()
     {
-        Width = 300;
-        SizeToContent = SizeToContent.Height;
-        SystemDecorations = SystemDecorations.BorderOnly;
+        SystemDecorations = SystemDecorations.None;
         ShowInTaskbar = false;
         CanResize = false;
         Topmost = true;
         WindowStartupLocation = WindowStartupLocation.Manual;
+        Background = Brushes.Transparent;
         Title = "Widget Subscription";
-        Background = SolidColorBrush.Parse("#161b22");
 
-        _header = new TextBlock { FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = Ink };
+        _iconImage = new Image
+        {
+            Width = 40,
+            Height = 40,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        _collapsedView = new Border
+        {
+            Width = CollapsedSize,
+            Height = CollapsedSize,
+            CornerRadius = new CornerRadius(12),
+            Background = Surface,
+            BorderBrush = Edge,
+            BorderThickness = new Thickness(1),
+            Child = _iconImage,
+        };
+
+        _header = new TextBlock
+        {
+            FontSize = 13,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = Ink,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var collapseButton = new Button
+        {
+            Content = "\u2013",
+            Width = 24,
+            Height = 24,
+            Padding = new Thickness(0),
+            FontSize = 16,
+            Background = Brushes.Transparent,
+            Foreground = Muted,
+            BorderThickness = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        collapseButton.Click += (_, _) => SetCollapsed(true);
+        var headerRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        headerRow.Children.Add(_header);
+        Grid.SetColumn(collapseButton, 1);
+        headerRow.Children.Add(collapseButton);
+
         _rows = new StackPanel { Spacing = 14 };
         _footer = new TextBlock { FontSize = 12, Foreground = Muted, TextWrapping = TextWrapping.Wrap };
 
-        Content = new StackPanel
+        _expandedView = new Border
         {
-            Margin = new Thickness(14),
-            Spacing = 12,
-            Children = { _header, _rows, _footer },
+            CornerRadius = new CornerRadius(12),
+            Background = Surface,
+            BorderBrush = Edge,
+            BorderThickness = new Thickness(1),
+            Child = new StackPanel
+            {
+                Margin = new Thickness(14),
+                Spacing = 12,
+                Children = { headerRow, _rows, _footer },
+            },
         };
 
-        // SizeToContent.Height resolves the final height on a later layout pass; re-pin then so the
-        // bottom edge stays anchored (Bounds is stale at OnOpened/Update time).
-        SizeChanged += (_, _) => RepositionIfVisible();
+        Content = new Panel { Children = { _collapsedView, _expandedView } };
+        ContextMenu = BuildContextMenu();
+        ApplyState();
+
+        // SizeToContent resolves the final height on a later layout pass; keep the widget on-screen
+        // whenever its size changes (collapse/expand or content growth).
+        SizeChanged += (_, _) => ClampToScreen();
     }
 
-    /// <summary>
-    /// Anchor the panel to the primary screen's notification-area corner (bottom-right of the
-    /// working area, i.e. above the taskbar). Avalonia's <see cref="TrayIcon"/> exposes no screen
-    /// coordinates, so this is the closest reliable anchor to the actual tray icon.
-    /// </summary>
-    private void PositionBottomRight()
+    private ContextMenu BuildContextMenu()
     {
-        var screen = Screens.Primary;
-        if (screen is null)
-            return;
+        var toggle = new MenuItem { Header = "Развернуть / свернуть" };
+        toggle.Click += (_, _) => SetCollapsed(!_collapsed);
+        var exit = new MenuItem { Header = "Выход" };
+        exit.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
 
-        var area = screen.WorkingArea;
-        var scale = screen.Scaling;
-        var margin = (int)Math.Round(8 * scale);
-        var width = (int)Math.Ceiling(Bounds.Width * scale);
-        var height = (int)Math.Ceiling(Bounds.Height * scale);
-
-        Position = new PixelPoint(
-            area.X + area.Width - width - margin,
-            area.Y + area.Height - height - margin);
-    }
-
-    private void RepositionIfVisible()
-    {
-        if (IsVisible)
-            PositionBottomRight();
-    }
-
-    protected override void OnOpened(EventArgs e)
-    {
-        base.OnOpened(e);
-        PositionBottomRight();
+        var menu = new ContextMenu();
+        menu.Items.Add(toggle);
+        menu.Items.Add(exit);
+        return menu;
     }
 
     public void Update(PanelView view)
     {
+        var bitmap = RenderIcon(view.Icon);
+        _iconImage.Source = bitmap;
+
         _header.Text = view.Provider.DisplayName;
 
         _rows.Children.Clear();
@@ -99,8 +166,143 @@ public sealed class PanelWindow : Window
             _ => string.Empty,
         };
         _footer.IsVisible = !string.IsNullOrEmpty(_footer.Text);
+    }
 
-        RepositionIfVisible();
+    /// <summary>Shows the widget collapsed and force-refreshes; called by the owner on expand.</summary>
+    public void RequestRefresh() => RefreshRequested?.Invoke(this, EventArgs.Empty);
+
+    private Bitmap RenderIcon(IconView icon)
+    {
+        var png = DonutRenderer.RenderPng(icon, 96);
+        using var stream = new MemoryStream(png);
+        var bitmap = new Bitmap(stream);
+        _iconBitmap?.Dispose();
+        _iconBitmap = bitmap;
+        return bitmap;
+    }
+
+    private void SetCollapsed(bool collapsed)
+    {
+        if (_collapsed == collapsed)
+            return;
+        _collapsed = collapsed;
+        ApplyState();
+        if (!collapsed)
+            RefreshRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ApplyState()
+    {
+        _collapsedView.IsVisible = _collapsed;
+        _expandedView.IsVisible = !_collapsed;
+        if (_collapsed)
+        {
+            SizeToContent = SizeToContent.Manual;
+            Width = CollapsedSize;
+            Height = CollapsedSize;
+        }
+        else
+        {
+            Width = ExpandedWidth;
+            SizeToContent = SizeToContent.Height;
+        }
+    }
+
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        if (_positioned)
+            return;
+        PositionBottomRight();
+        _positioned = true;
+    }
+
+    /// <summary>Default landing spot: the working area's bottom-right corner (near the tray).</summary>
+    private void PositionBottomRight()
+    {
+        var screen = Screens.ScreenFromVisual(this) ?? Screens.Primary;
+        if (screen is null)
+            return;
+
+        var area = screen.WorkingArea;
+        var margin = (int)Math.Round(16 * screen.Scaling);
+        var width = (int)Math.Ceiling(Bounds.Width * screen.Scaling);
+        var height = (int)Math.Ceiling(Bounds.Height * screen.Scaling);
+
+        Position = new PixelPoint(
+            area.X + area.Width - width - margin,
+            area.Y + area.Height - height - margin);
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        var point = e.GetCurrentPoint(this);
+        if (!point.Properties.IsLeftButtonPressed)
+            return;
+        // Let the collapse button (or any control) handle its own click instead of starting a drag.
+        if (e.Source is Visual source && source.FindAncestorOfType<Button>(includeSelf: true) is not null)
+            return;
+
+        _pointerDown = true;
+        _dragging = false;
+        _pressPointer = this.PointToScreen(point.Position);
+        _pressWindow = Position;
+        e.Pointer.Capture(this);
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (!_pointerDown)
+            return;
+
+        var current = this.PointToScreen(e.GetPosition(this));
+        var dx = current.X - _pressPointer.X;
+        var dy = current.Y - _pressPointer.Y;
+        if (!_dragging && Math.Abs(dx) + Math.Abs(dy) < DragThreshold)
+            return;
+
+        _dragging = true;
+        Position = ClampPosition(new PixelPoint(_pressWindow.X + dx, _pressWindow.Y + dy));
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (!_pointerDown)
+            return;
+
+        _pointerDown = false;
+        e.Pointer.Capture(null);
+
+        // A press with no meaningful movement is a click: expand the collapsed icon.
+        if (!_dragging && e.InitialPressMouseButton == MouseButton.Left && _collapsed)
+            SetCollapsed(false);
+        _dragging = false;
+    }
+
+    private void ClampToScreen()
+    {
+        if (_positioned)
+            Position = ClampPosition(Position);
+    }
+
+    private PixelPoint ClampPosition(PixelPoint desired)
+    {
+        var screen = Screens.ScreenFromVisual(this) ?? Screens.Primary;
+        if (screen is null)
+            return desired;
+
+        var area = screen.WorkingArea;
+        var width = (int)Math.Ceiling(Bounds.Width * screen.Scaling);
+        var height = (int)Math.Ceiling(Bounds.Height * screen.Scaling);
+        var maxX = Math.Max(area.X, area.X + area.Width - width);
+        var maxY = Math.Max(area.Y, area.Y + area.Height - height);
+
+        return new PixelPoint(
+            Math.Clamp(desired.X, area.X, maxX),
+            Math.Clamp(desired.Y, area.Y, maxY));
     }
 
     private static Control BuildRow(LimitView limit)

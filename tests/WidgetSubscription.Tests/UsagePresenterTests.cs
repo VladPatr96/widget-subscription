@@ -105,13 +105,33 @@ public class UsagePresenterTests
     }
 
     [Fact]
-    public void Degraded_with_a_cached_snapshot_greys_the_icon_and_shows_a_reason()
+    public void Fresh_snapshot_with_a_transient_error_keeps_showing_the_cached_data()
     {
         var state = new UsageState(
             Provider,
             new UsageSnapshot(new[] { new Limit(LimitKind.Session, "5-hour", 80, Now.AddHours(1), true) }, Now),
-            Error: new FetchError(FetchErrorKind.SourceUnavailable, "Источник Claude Code недоступен"),
+            Error: new FetchError(FetchErrorKind.SourceUnavailable, "Claude Code вернул 429."),
             FetchedAt: Now,
+            Now: Now,
+            StaleAfter: TimeSpan.FromSeconds(90));
+
+        var panel = UsagePresenter.Map(state);
+
+        Assert.False(panel.IsDegraded);                     // transient error hidden while data is fresh
+        Assert.False(panel.Icon.IsDegraded);
+        Assert.Equal("#2ea043", panel.Icon.Color);          // normal threshold color, not grey
+        Assert.Null(panel.DegradedReason);
+        Assert.Single(panel.Limits);
+    }
+
+    [Fact]
+    public void Stale_snapshot_with_an_error_greys_the_icon_and_shows_a_reason()
+    {
+        var state = new UsageState(
+            Provider,
+            new UsageSnapshot(new[] { new Limit(LimitKind.Session, "5-hour", 80, Now.AddHours(1), true) }, Now.AddMinutes(-2)),
+            Error: new FetchError(FetchErrorKind.SourceUnavailable, "Источник Claude Code недоступен"),
+            FetchedAt: Now.AddMinutes(-2),
             Now: Now,
             StaleAfter: TimeSpan.FromSeconds(90));
 

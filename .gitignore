@@ -5,5 +5,8 @@
 [Bb]in/
 [Oo]bj/
 
+# Publish output (single-file exe)
+dist/
+
 # Local SDK install (not part of the repo)
 .dotnet-sdk/

@@ -7,69 +7,62 @@ using WidgetSubscription.Core;
 namespace WidgetSubscription.App;
 
 /// <summary>
-/// Owns the tray presence and marshals engine updates onto the UI thread. Redraws the donut icon
-/// and tooltip on every <see cref="UsageMonitor.Updated"/>, opens the <see cref="PanelWindow"/>
-/// (force-refreshing per the open policy) on left-click, and exits from the context menu.
+/// Owns the tray presence and the floating desktop <see cref="PanelWindow"/>, and marshals engine
+/// updates onto the UI thread. Redraws the donut icon/tooltip and the widget on every
+/// <see cref="UsageMonitor.Updated"/>. The tray icon has no native menu (its popup positioning is
+/// unreliable on Windows) — left-click toggles the widget, and all commands live on the widget's
+/// own correctly-positioned right-click menu. Exit is driven by the widget's context menu.
 /// </summary>
 public sealed class TrayController : IDisposable
 {
     private readonly UsageMonitor _monitor;
     private readonly TrayIcon _tray;
-    private PanelWindow? _panel;
+    private readonly PanelWindow _widget;
 
     public TrayController(UsageMonitor monitor)
     {
         _monitor = monitor;
 
-        var exit = new NativeMenuItem("Выход");
-        exit.Click += (_, _) => Shutdown();
-        var menu = new NativeMenu();
-        menu.Add(exit);
-
         _tray = new TrayIcon
         {
             ToolTipText = "Widget Subscription",
             IsVisible = true,
-            Menu = menu,
         };
-        _tray.Clicked += (_, _) => TogglePanel();
+        _tray.Clicked += (_, _) => ToggleWidget();
+
+        _widget = new PanelWindow();
+        _widget.ExitRequested += (_, _) => Shutdown();
+        _widget.RefreshRequested += (_, _) => _ = _monitor.RefreshOnOpenAsync(CancellationToken.None);
 
         _monitor.Updated += OnUpdated;
-        UpdateTray();
+        UpdateAll();
+
+        // Land on the desktop as a collapsed icon from launch, so it is a movable widget, not a
+        // tray-only popup.
+        _widget.Show();
     }
 
-    private void OnUpdated(object? sender, EventArgs e) => Dispatcher.UIThread.Post(UpdateTray);
+    private void OnUpdated(object? sender, EventArgs e) => Dispatcher.UIThread.Post(UpdateAll);
 
-    private void UpdateTray()
+    private void UpdateAll()
     {
         var view = UsagePresenter.Map(_monitor.Current);
         _tray.Icon = TrayIconRenderer.RenderIcon(view.Icon);
         _tray.ToolTipText = view.TooltipText;
-        _panel?.Update(view);
+        _widget.Update(view);
     }
 
-    private void TogglePanel()
+    private void ToggleWidget()
     {
-        if (_panel is { IsVisible: true })
+        if (_widget.IsVisible)
         {
-            _panel.Hide();
+            _widget.Hide();
             return;
         }
 
-        // Force a fresh snapshot when opening (spec #5), then show what we have immediately.
+        _widget.Show();
+        _widget.Activate();
         _ = _monitor.RefreshOnOpenAsync(CancellationToken.None);
-
-        _panel ??= CreatePanel();
-        _panel.Update(UsagePresenter.Map(_monitor.Current));
-        _panel.Show();
-        _panel.Activate();
-    }
-
-    private PanelWindow CreatePanel()
-    {
-        var panel = new PanelWindow();
-        panel.Closed += (_, _) => _panel = null;
-        return panel;
     }
 
     private static void Shutdown()
@@ -83,5 +76,6 @@ public sealed class TrayController : IDisposable
         _monitor.Updated -= OnUpdated;
         _tray.IsVisible = false;
         _tray.Dispose();
+        _widget.Close();
     }
 }

@@ -58,11 +58,16 @@ public static class SelfTest
         yield return ("healthy", Success(85, 98, 98));
         yield return ("one-close", Success(12, 60, 34));
         yield return ("one-exhausted", Success(0, 41, 4));
-        yield return ("degraded", new UsageState(
+        yield return ("rate-limited-fresh", new UsageState(
             Provider,
             new UsageSnapshot(Limits(85, 98, 98), Now),
+            new FetchError(FetchErrorKind.SourceUnavailable, "Claude Code вернул 429."),
+            FetchedAt: Now, Now: Now, StaleAfter: TimeSpan.FromSeconds(90)));
+        yield return ("degraded-stale", new UsageState(
+            Provider,
+            new UsageSnapshot(Limits(85, 98, 98), Now.AddSeconds(-120)),
             new FetchError(FetchErrorKind.SourceUnavailable, "Источник Claude Code недоступен"),
-            Now, Now, TimeSpan.FromSeconds(90)));
+            FetchedAt: Now.AddSeconds(-120), Now: Now, StaleAfter: TimeSpan.FromSeconds(90)));
         yield return ("no-credentials", new UsageState(
             Provider, Snapshot: null,
             new FetchError(FetchErrorKind.NoCredentials, "Нет учётных данных Claude Code"),

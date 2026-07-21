@@ -62,22 +62,28 @@ public static class UsagePresenter
         var worst = limits.Length > 0 ? limits.Min(l => l.Headroom) : 0d;
         var worstStatus = StatusOf(worst);
 
+        // A failed fetch degrades the presentation only when there is no usable fresh data: a
+        // transient error (e.g. an HTTP 429 rate-limit) stays hidden while the last snapshot is
+        // still within the stale window, so the widget keeps showing the cached numbers instead
+        // of flashing an alarming reason on every backoff tick.
+        var degraded = state.Error is not null && (state.Snapshot is null || state.IsStale);
+
         var icon = new IconView(
             WorstHeadroom: worst,
             Status: worstStatus,
-            Color: state.IsDegraded ? DegradedColor : ColorOf(worstStatus),
+            Color: degraded ? DegradedColor : ColorOf(worstStatus),
             ArcFraction: Math.Clamp(worst / 100d, 0d, 1d),
-            IsDegraded: state.IsDegraded);
+            IsDegraded: degraded);
 
         var ageText = state.IsStale && state.Age is { } age ? FormatAge(age) : null;
-        var tooltip = BuildTooltip(state.Provider, worst, limits.Length, state.IsDegraded);
+        var tooltip = BuildTooltip(state.Provider, worst, limits.Length, degraded);
 
         return new PanelView(
             Provider: state.Provider,
             Icon: icon,
             Limits: limits,
-            IsDegraded: state.IsDegraded,
-            DegradedReason: state.IsDegraded ? state.Error?.Message : null,
+            IsDegraded: degraded,
+            DegradedReason: degraded ? state.Error?.Message : null,
             IsStale: state.IsStale,
             Age: state.Age,
             AgeText: ageText,
