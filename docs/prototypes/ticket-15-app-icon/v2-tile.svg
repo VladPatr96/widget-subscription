@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- V2 "Tile + Hole" — a solid terracotta app plate with the donut punched out as
+       negative space. Strong app identity for taskbar/installer/.ico; the hole
+       shows the background, so it reads on light and dark alike. -->
+  <defs>
+    <mask id="hole">
+      <rect width="256" height="256" fill="white"/>
+      <circle cx="128" cy="128" r="46" fill="black"/>
+    </mask>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="54" fill="#D97757" mask="url(#hole)"/>
+</svg>

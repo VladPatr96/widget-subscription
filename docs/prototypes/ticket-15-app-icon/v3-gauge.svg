@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- V3 "Gauge" — an open donut (300° dial, gap at top) with a needle + hub.
+       Reads as a meter / headroom dial while keeping the ring shape. -->
+  <path d="M169 57 A82 82 0 1 1 87 57" fill="none" stroke="#D97757"
+        stroke-width="40" stroke-linecap="round"/>
+  <line x1="128" y1="128" x2="171" y2="103" stroke="#B5502F"
+        stroke-width="15" stroke-linecap="round"/>
+  <circle cx="128" cy="128" r="12" fill="#B5502F"/>
+</svg>

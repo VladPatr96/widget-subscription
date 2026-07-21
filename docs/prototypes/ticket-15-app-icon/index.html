@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — throwaway. Тикет #15: статичная иконка ПРИЛОЖЕНИЯ
+  (панель задач / окно / инсталлятор / .ico) — отдельно от динамической
+  донат-иконки трея. 5 направлений на выбор. Открыть в браузере, выбрать
+  направление. Удалить/впитать после решения.
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE — иконка приложения (тикет #15)</title>
+<style>
+  :root{ --tc:#D97757; --bg:#0d1117; --panel:#161b22; --ink:#e6edf3; --muted:#8b949e; --line:#30363d; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 "Segoe UI",system-ui,sans-serif;padding:28px}
+  h1{font-size:19px;margin:0 0 4px}
+  .sub{color:var(--muted);max-width:80ch;margin:0 0 8px}
+  .grid{display:flex;flex-direction:column;gap:18px;margin-top:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+  .meta{width:230px}
+  .meta .nm{font-weight:700;font-size:15px}
+  .meta .id{color:var(--tc);font-weight:700;font-variant-numeric:tabular-nums}
+  .meta .desc{color:var(--muted);font-size:12.5px;margin-top:4px}
+  .plates{display:flex;gap:20px;flex-wrap:wrap}
+  .plate{border-radius:10px;padding:12px 14px;display:flex;align-items:flex-end;gap:14px}
+  .light{background:#f5f5f4;border:1px solid #d6d3d1}
+  .dark{background:#0b0e13;border:1px solid #21262d}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .cell img{display:block}
+  .cell span{font-size:11px;color:var(--muted)}
+  .plate.light .cell span{color:#57534e}
+  .pcap{font-size:11px;color:var(--muted);width:100%;margin:-4px 0 2px;text-transform:uppercase;letter-spacing:.05em}
+</style>
+</head>
+<body>
+  <h1>Иконка приложения — 5 направлений на выбор (тикет #15)</h1>
+  <p class="sub">PROTOTYPE / throwaway. Это <b>статичная</b> иконка идентичности приложения
+    (панель задач, окно, инсталлятор, <code>.ico</code>) — <b>не</b> динамическая донат-иконка трея
+    (её по-прежнему рисует <code>DonutRenderer</code> по состоянию лимитов). Бренд-цвет Claude —
+    терракота <code>#D97757</code>. Каждый вариант показан на 16 / 32 / 48 / 256 px, на светлой и тёмной плашке.</p>
+
+  <div class="grid" id="grid"></div>
+
+<script>
+  const variants = [
+    {id:"V1", nm:"Pure Ring", file:"v1-ring.svg",
+      desc:"Чистое донат-кольцо. Максимально просто, прямая связь с трей-иконкой, дырка адаптируется к теме."},
+    {id:"V2", nm:"Tile + Hole", file:"v2-tile.svg",
+      desc:"Сплошная терракотовая плашка приложения с дыркой-донатом (негатив). Сильная «иконка приложения», отлично для .ico/инсталлятора."},
+    {id:"V3", nm:"Gauge", file:"v3-gauge.svg",
+      desc:"Открытое кольцо-циферблат (300°) со стрелкой. Читается как измеритель / запас."},
+    {id:"V4", nm:"Tri-arc", file:"v4-triarc.svg",
+      desc:"Три дуги = три отслеживаемых лимита (5ч / неделя / Fable). Доменный смысл, три тона терракоты."},
+    {id:"V5", nm:"Spark-in-ring", file:"v5-spark.svg",
+      desc:"Кольцо вокруг «искры» Claude. Самая сильная бренд-связь, самая насыщенная на 16px."},
+  ];
+  const sizes = [16,32,48,256];
+  const grid = document.getElementById("grid");
+  for(const v of variants){
+    const card = document.createElement("div"); card.className="card";
+    card.innerHTML = `<div class="meta"><div><span class="id">${v.id}</span> &nbsp;<span class="nm">${v.nm}</span></div>
+      <div class="desc">${v.desc}</div></div>`;
+    const plates = document.createElement("div"); plates.className="plates";
+    for(const theme of ["light","dark"]){
+      const p = document.createElement("div"); p.className="plate "+theme;
+      p.innerHTML = `<div class="pcap">${theme==="light"?"светлая":"тёмная"}</div>`;
+      for(const s of sizes){
+        const cell=document.createElement("div"); cell.className="cell";
+        cell.innerHTML = `<img src="${v.file}" width="${s}" height="${s}" alt="${v.id} ${s}px"><span>${s}px</span>`;
+        p.appendChild(cell);
+      }
+      plates.appendChild(p);
+    }
+    card.appendChild(plates);
+    grid.appendChild(card);
+  }
+</script>
+</body>
+</html>

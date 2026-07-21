@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- V1 "Pure Ring" — the donut motif at its simplest. Single terracotta ring,
+       transparent hole adapts to any theme. Most literal tie to the tray donut. -->
+  <circle cx="128" cy="128" r="82" fill="none" stroke="#D97757" stroke-width="46"/>
+</svg>

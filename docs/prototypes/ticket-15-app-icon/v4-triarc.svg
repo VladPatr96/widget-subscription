@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- V4 "Tri-arc" — three separated arcs form the ring, one per tracked limit
+       (5h / weekly / Fable). Subtle three-tone terracotta. Domain-specific. -->
+  <g fill="none" stroke-width="34" stroke-linecap="round">
+    <path d="M142.2 47.2 A82 82 0 0 1 205.1 156.0" stroke="#E08A6E"/>
+    <path d="M190.8 180.7 A82 82 0 0 1 65.2 180.7" stroke="#D97757"/>
+    <path d="M50.9 156.0 A82 82 0 0 1 113.8 47.2" stroke="#C2603C"/>
+  </g>
+</svg>
