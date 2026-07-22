@@ -117,6 +117,24 @@ public class ClaudeCodeAdapterTests
     }
 
     [Fact]
+    public async Task Unauthorized_invalidates_the_source_before_the_reread()
+    {
+        // A refreshable source (own-login) must be told its token was rejected so the reread
+        // forces a refresh rather than returning the same token (spec §4.3).
+        var creds = new InvalidatingCredentials("stale", "fresh");
+        var handler = Responder.Sequence(
+            () => new HttpResponseMessage(HttpStatusCode.Unauthorized),
+            () => Json(HttpStatusCode.OK, SampleBody));
+        var adapter = Build(creds, handler);
+
+        var result = await adapter.FetchAsync(CancellationToken.None);
+
+        Assert.IsType<FetchResult.Success>(result);
+        Assert.Equal(1, creds.Invalidations);
+        Assert.True(creds.InvalidatedBeforeReread);
+    }
+
+    [Fact]
     public async Task Unauthorized_after_retry_yields_Unauthorized()
     {
         var creds = new FakeCredentials("stale", "still-stale");
@@ -267,6 +285,34 @@ public class ClaudeCodeAdapterTests
             var token = _tokens.Count > 0 ? _tokens.Dequeue() : _last;
             return Task.FromResult(token);
         }
+    }
+
+    private sealed class InvalidatingCredentials : ICredentialSource, ICredentialInvalidation
+    {
+        private readonly Queue<AccessToken?> _tokens;
+        private readonly AccessToken? _last;
+
+        public InvalidatingCredentials(params string?[] tokens)
+        {
+            _tokens = new Queue<AccessToken?>(
+                tokens.Select(t => t is null ? null : new AccessToken(t, null)));
+            _last = _tokens.Count > 0 ? _tokens.Last() : null;
+        }
+
+        public int Calls { get; private set; }
+        public int Invalidations { get; private set; }
+        public bool InvalidatedBeforeReread { get; private set; }
+
+        public Task<AccessToken?> GetAsync(CancellationToken ct)
+        {
+            Calls++;
+            if (Calls == 2)
+                InvalidatedBeforeReread = Invalidations > 0;
+            var token = _tokens.Count > 0 ? _tokens.Dequeue() : _last;
+            return Task.FromResult(token);
+        }
+
+        public void Invalidate() => Invalidations++;
     }
 
     private sealed class Responder : HttpMessageHandler

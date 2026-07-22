@@ -14,5 +14,18 @@ public interface ICredentialSource
     Task<AccessToken?> GetAsync(CancellationToken ct);
 }
 
+/// <summary>
+/// Optional role a credential source may also implement: a hint that the last token it handed out
+/// was rejected (HTTP 401), so any cached token should be dropped and the next <see
+/// cref="ICredentialSource.GetAsync"/> must re-acquire. The adapter calls this on its 401 path
+/// before the single reread+retry. The borrow source does not implement it — rereading the file
+/// already picks up a token Claude Code refreshed — while the own-login source uses it to force a
+/// refresh of a server-revoked token that has not yet reached its local expiry (spec §4.3).
+/// </summary>
+public interface ICredentialInvalidation
+{
+    void Invalidate();
+}
+
 /// <summary>An access token and its optional expiry, as read from the provider's credentials.</summary>
 public sealed record AccessToken(string Value, DateTimeOffset? ExpiresAt);

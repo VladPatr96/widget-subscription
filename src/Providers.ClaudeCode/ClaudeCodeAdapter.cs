@@ -46,9 +46,11 @@ public sealed class ClaudeCodeAdapter : IUsageProvider
 
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
-                // The token may have gone stale; Claude Code could have refreshed it.
-                // Re-read credentials once and retry before degrading.
+                // The token may have gone stale; Claude Code could have refreshed it, or the
+                // own-login source can refresh its own grant. Hint the source that this token was
+                // rejected, then re-read once and retry before degrading.
                 response.Dispose();
+                (_credentials as ICredentialInvalidation)?.Invalidate();
                 token = await _credentials.GetAsync(ct).ConfigureAwait(false);
                 if (token is null)
                     return Fail(FetchErrorKind.Unauthorized,
