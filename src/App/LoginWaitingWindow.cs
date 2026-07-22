@@ -41,6 +41,7 @@ public sealed class LoginWaitingWindow : Window, ICodeEntry, IManualEntrySignal
         Topmost = true;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = Surface;
+        Icon = new WindowIcon(new MemoryStream(AppIconRenderer.RenderPng(64)));
 
         var status = new TextBlock
         {

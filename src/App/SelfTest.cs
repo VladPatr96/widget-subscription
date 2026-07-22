@@ -63,6 +63,15 @@ public static class SelfTest
         try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, recursive: true); } catch (IOException) { /* best effort */ }
 
         Console.WriteLine();
+        Console.WriteLine("== App icon (V5 Spark-in-ring) ==");
+        var icon16 = AppIconRenderer.RenderPng(16);
+        var icon256 = AppIconRenderer.RenderPng(256);
+        var ico = AppIconRenderer.BuildIco(16, 24, 32, 48, 64, 128, 256);
+        var iconOk = IsPng(icon16) && IsPng(icon256) && ico.Length > 6 && ico[2] == 1 && ico[4] == 7;
+        ok &= iconOk;
+        Console.WriteLine($"png16={icon16.Length}B png256={icon256.Length}B ico={ico.Length}B frames={ico[4]} valid={iconOk}");
+
+        Console.WriteLine();
         Console.WriteLine(ok ? "SELFTEST OK" : "SELFTEST FAILED");
         return ok ? 0 : 1;
     }

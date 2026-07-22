@@ -14,6 +14,14 @@ internal static class Program
         if (args.Contains("--selftest"))
             return SelfTest.RunAsync().GetAwaiter().GetResult();
 
+        // Regenerate the committed app icon from the SkiaSharp geometry (build asset, run once).
+        if (args is ["--makeicon", var iconPath, ..])
+        {
+            File.WriteAllBytes(iconPath, AppIconRenderer.BuildIco(16, 24, 32, 48, 64, 128, 256));
+            Console.WriteLine($"icon written: {iconPath}");
+            return 0;
+        }
+
         // One widget per user: a second instance would double the poll rate against the shared
         // usage endpoint and invite HTTP 429 rate-limits, so bail if we are not the first.
         using var single = new System.Threading.Mutex(initiallyOwned: true, @"Local\WidgetSubscription.SingleInstance", out var isFirst);

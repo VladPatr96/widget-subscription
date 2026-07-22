@@ -204,6 +204,17 @@ public sealed class PanelWindow : Window
             menu.Items.Add(signOut);
         }
 
+        var autostart = new MenuItem
+        {
+            Header = (AutostartRegistry.IsEnabled() ? "\u2713 " : "") + "Запускать при входе",
+        };
+        autostart.Click += (_, _) =>
+        {
+            AutostartRegistry.SetEnabled(!AutostartRegistry.IsEnabled());
+            ContextMenu = BuildContextMenu(_lastAuth); // refresh the checkmark
+        };
+        menu.Items.Add(autostart);
+
         var exit = new MenuItem { Header = "Выход" };
         exit.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
         menu.Items.Add(exit);
