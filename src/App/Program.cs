@@ -14,6 +14,10 @@ internal static class Program
         if (args.Contains("--selftest"))
             return SelfTest.RunAsync().GetAwaiter().GetResult();
 
+        // Console harness to diagnose the interactive login against live endpoints.
+        if (args.Contains("--login"))
+            return LoginDiagnostic.RunAsync().GetAwaiter().GetResult();
+
         // Regenerate the committed app icon from the SkiaSharp geometry (build asset, run once).
         if (args is ["--makeicon", var iconPath, ..])
         {

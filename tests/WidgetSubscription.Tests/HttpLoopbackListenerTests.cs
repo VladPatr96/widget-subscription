@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using WidgetSubscription.Providers.ClaudeCode;
 using Xunit;
 
@@ -13,7 +15,7 @@ public sealed class HttpLoopbackListenerTests
     [Fact]
     public async Task Captures_code_and_state_from_the_redirect()
     {
-        var factory = new HttpLoopbackListenerFactory();
+        var factory = new HttpLoopbackListenerFactory(FreePort());
         using var listener = factory.TryStart();
         Assert.NotNull(listener);
 
@@ -31,7 +33,7 @@ public sealed class HttpLoopbackListenerTests
     [Fact]
     public async Task Surfaces_the_error_parameter()
     {
-        var factory = new HttpLoopbackListenerFactory();
+        var factory = new HttpLoopbackListenerFactory(FreePort());
         using var listener = factory.TryStart();
         Assert.NotNull(listener);
 
@@ -47,7 +49,7 @@ public sealed class HttpLoopbackListenerTests
     [Fact]
     public async Task Cancellation_stops_waiting()
     {
-        var factory = new HttpLoopbackListenerFactory();
+        var factory = new HttpLoopbackListenerFactory(FreePort());
         using var listener = factory.TryStart();
         Assert.NotNull(listener);
 
@@ -56,5 +58,13 @@ public sealed class HttpLoopbackListenerTests
         cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await waiting);
+    }
+
+    // A free loopback port for the test — production uses Claude Code's fixed 54545.
+    private static int FreePort()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        return ((IPEndPoint)socket.LocalEndPoint!).Port;
     }
 }

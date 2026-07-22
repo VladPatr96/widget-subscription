@@ -1,37 +1,37 @@
 using System.Net;
-using System.Net.Sockets;
 using System.Text;
 
 namespace WidgetSubscription.Providers.ClaudeCode;
 
 /// <summary>
-/// Binds an ephemeral loopback port and serves the single OAuth redirect (RFC 8252, #18 §1a).
-/// Returns <c>null</c> from <see cref="TryStart"/> when no port can be bound so the caller falls
-/// back to hosted-paste (#18 §3.4).
+/// Binds Claude Code's registered loopback callback port for the OAuth redirect (#18 §1a).
+/// claude.ai validates <c>redirect_uri</c> exactly and does <em>not</em> ignore the port (contrary to
+/// RFC 8252), so this must be the fixed port the public client <c>9d1c250a</c> registered
+/// (<see cref="DefaultPort"/>), not an arbitrary ephemeral one — otherwise authorize is rejected.
+/// Returns <c>null</c> from <see cref="TryStart"/> when the port cannot be bound (already in use),
+/// so the caller falls back to hosted-paste (#18 §3.4). The port is injectable for tests.
 /// </summary>
 public sealed class HttpLoopbackListenerFactory : ILoopbackListenerFactory
 {
+    public const int DefaultPort = 54545;
+
+    private readonly int _port;
+
+    public HttpLoopbackListenerFactory(int port = DefaultPort) => _port = port;
+
     public ILoopbackListener? TryStart()
     {
         try
         {
-            var port = FreeLoopbackPort();
             var listener = new HttpListener();
-            listener.Prefixes.Add($"http://localhost:{port}/");
+            listener.Prefixes.Add($"http://localhost:{_port}/");
             listener.Start();
-            return new HttpLoopbackListener(listener, port);
+            return new HttpLoopbackListener(listener, _port);
         }
-        catch (Exception ex) when (ex is HttpListenerException or SocketException)
+        catch (HttpListenerException)
         {
             return null;
         }
-    }
-
-    private static int FreeLoopbackPort()
-    {
-        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-        return ((IPEndPoint)socket.LocalEndPoint!).Port;
     }
 }
 
