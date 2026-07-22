@@ -36,7 +36,12 @@ public static class SelfTest
         Console.WriteLine();
         Console.WriteLine("== Live provider path (real credentials, read-only) ==");
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        var provider = new ClaudeCodeAdapter(http, new ClaudeCredentialsFileSource());
+        var tempDir = Path.Combine(Path.GetTempPath(), "widget-selftest-" + Guid.NewGuid().ToString("N"));
+        var credentials = new SelectingCredentialSource(
+            new ClaudeCredentialsFileSource(),
+            new OwnLoginCredentialSource(http, new WidgetTokenFileStore(Path.Combine(tempDir, "credentials.json"))),
+            new CredentialModeFileStore(Path.Combine(tempDir, "mode.txt")));
+        var provider = new ClaudeCodeAdapter(http, credentials);
         using var monitor = new UsageMonitor(provider);
         await monitor.RefreshNowAsync(CancellationToken.None);
         var live = UsagePresenter.Map(monitor.Current);
@@ -47,6 +52,15 @@ public static class SelfTest
             $"worst={live.Icon.WorstHeadroom:0}% png={livePng.Length}B valid={IsPng(livePng)}");
         foreach (var limit in live.Limits)
             Console.WriteLine($"    {limit.DisplayName,-9} {limit.Headroom,3:0}% [{limit.StatusLabel}] {limit.ResetText}");
+
+        Console.WriteLine();
+        Console.WriteLine("== Auth wiring (own-login empty ⇒ login required) ==");
+        var ownEmpty = new OwnLoginCredentialSource(http, new WidgetTokenFileStore(Path.Combine(tempDir, "empty.json")));
+        var ownToken = await ownEmpty.GetAsync(CancellationToken.None);
+        var loginRequired = ownToken is null;
+        ok &= loginRequired;
+        Console.WriteLine($"own-empty token={ownToken?.Value ?? "null"} loginRequired={loginRequired}");
+        try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, recursive: true); } catch (IOException) { /* best effort */ }
 
         Console.WriteLine();
         Console.WriteLine(ok ? "SELFTEST OK" : "SELFTEST FAILED");

@@ -36,10 +36,12 @@ public sealed class PanelWindow : Window
     private readonly TextBlock _header;
     private readonly StackPanel _rows;
     private readonly TextBlock _footer;
+    private readonly StackPanel _loginPanel;
 
     private Bitmap? _iconBitmap;
     private bool _collapsed = true;
     private bool _positioned;
+    private AuthView _lastAuth = new(false, false, false, null);
 
     // Manual drag state — lets us distinguish a click (expand) from a drag (move) on the same
     // surface, which BeginMoveDrag cannot do because it swallows the click.
@@ -53,6 +55,15 @@ public sealed class PanelWindow : Window
 
     /// <summary>Raised when the widget expands, so the owner can force a fresh fetch (spec #5).</summary>
     public event EventHandler? RefreshRequested;
+
+    /// <summary>Raised when the user clicks "Войти через Anthropic" (empty state or menu).</summary>
+    public event EventHandler? LoginRequested;
+
+    /// <summary>Raised when the user picks "Выйти из аккаунта" (own-login sign-out).</summary>
+    public event EventHandler? SignOutRequested;
+
+    /// <summary>Raised when the user toggles the credential source in the menu.</summary>
+    public event EventHandler? SourceToggleRequested;
 
     public PanelWindow()
     {
@@ -112,6 +123,35 @@ public sealed class PanelWindow : Window
         _rows = new StackPanel { Spacing = 14 };
         _footer = new TextBlock { FontSize = 12, Foreground = Muted, TextWrapping = TextWrapping.Wrap };
 
+        var loginButton = new Button
+        {
+            Content = "Войти через Anthropic",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            Background = SolidColorBrush.Parse("#D97757"),
+            Foreground = Brushes.White,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(0, 8, 0, 8),
+        };
+        loginButton.Click += (_, _) => LoginRequested?.Invoke(this, EventArgs.Empty);
+        _loginPanel = new StackPanel
+        {
+            IsVisible = false,
+            Spacing = 10,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "Войдите через Anthropic, чтобы видеть лимиты подписки.",
+                    Foreground = Muted,
+                    FontSize = 13,
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                loginButton,
+            },
+        };
+
         _expandedView = new Border
         {
             CornerRadius = new CornerRadius(12),
@@ -122,12 +162,12 @@ public sealed class PanelWindow : Window
             {
                 Margin = new Thickness(14),
                 Spacing = 12,
-                Children = { headerRow, _rows, _footer },
+                Children = { headerRow, _rows, _loginPanel, _footer },
             },
         };
 
         Content = new Panel { Children = { _collapsedView, _expandedView } };
-        ContextMenu = BuildContextMenu();
+        ContextMenu = BuildContextMenu(new AuthView(false, false, false, null));
         ApplyState();
 
         // SizeToContent resolves the final height on a later layout pass; keep the widget on-screen
@@ -135,37 +175,69 @@ public sealed class PanelWindow : Window
         SizeChanged += (_, _) => ClampToScreen();
     }
 
-    private ContextMenu BuildContextMenu()
+    private ContextMenu BuildContextMenu(AuthView auth)
     {
+        var menu = new ContextMenu();
+
         var toggle = new MenuItem { Header = "Развернуть / свернуть" };
         toggle.Click += (_, _) => SetCollapsed(!_collapsed);
+        menu.Items.Add(toggle);
+
+        var source = new MenuItem
+        {
+            Header = auth.SourceIsOwn ? "Источник: собственный вход" : "Источник: Claude Code",
+        };
+        source.Click += (_, _) => SourceToggleRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(source);
+
+        if (auth.LoginRequired)
+        {
+            var login = new MenuItem { Header = "Войти через Anthropic" };
+            login.Click += (_, _) => LoginRequested?.Invoke(this, EventArgs.Empty);
+            menu.Items.Add(login);
+        }
+
+        if (auth.CanSignOut)
+        {
+            var signOut = new MenuItem { Header = "Выйти из аккаунта" };
+            signOut.Click += (_, _) => SignOutRequested?.Invoke(this, EventArgs.Empty);
+            menu.Items.Add(signOut);
+        }
+
         var exit = new MenuItem { Header = "Выход" };
         exit.Click += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
-
-        var menu = new ContextMenu();
-        menu.Items.Add(toggle);
         menu.Items.Add(exit);
+
         return menu;
     }
 
-    public void Update(PanelView view)
+    public void Update(PanelView view, AuthView auth)
     {
-        var bitmap = RenderIcon(view.Icon);
-        _iconImage.Source = bitmap;
-
+        _iconImage.Source = RenderIcon(view.Icon);
         _header.Text = view.Provider.DisplayName;
 
-        _rows.Children.Clear();
-        foreach (var limit in view.Limits)
-            _rows.Children.Add(BuildRow(limit));
+        _loginPanel.IsVisible = auth.LoginRequired;
+        _rows.IsVisible = !auth.LoginRequired;
 
-        _footer.Text = view switch
+        _rows.Children.Clear();
+        if (!auth.LoginRequired)
+            foreach (var limit in view.Limits)
+                _rows.Children.Add(BuildRow(limit));
+
+        var footer = auth.Notice ?? view switch
         {
             { IsDegraded: true } => view.DegradedReason ?? "Нет данных",
             { IsStale: true, AgeText: { } age } => age,
             _ => string.Empty,
         };
-        _footer.IsVisible = !string.IsNullOrEmpty(_footer.Text);
+        _footer.Text = footer;
+        _footer.IsVisible = !string.IsNullOrEmpty(footer);
+
+        if (!auth.Equals(_lastAuth))
+        {
+            _lastAuth = auth;
+            ContextMenu = BuildContextMenu(auth);
+        }
     }
 
     /// <summary>Shows the widget collapsed and force-refreshes; called by the owner on expand.</summary>

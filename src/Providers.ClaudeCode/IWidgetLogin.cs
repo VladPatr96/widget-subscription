@@ -56,3 +56,13 @@ public interface ICodeEntry
 {
     Task<string?> PromptAsync(CancellationToken ct);
 }
+
+/// <summary>
+/// Optional capability of an <see cref="ICodeEntry"/>: a token the user can trigger to abandon the
+/// loopback wait early and switch straight to hosted-paste (#18 §3.3), rather than waiting out the
+/// 3-minute timeout when the browser redirect silently fails.
+/// </summary>
+public interface IManualEntrySignal
+{
+    CancellationToken ManualEntryRequested { get; }
+}

@@ -23,9 +23,19 @@ public partial class App : Application
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            var provider = new ClaudeCodeAdapter(_http, new ClaudeCredentialsFileSource());
+
+            var tokenStore = new WidgetTokenFileStore();
+            var modeStore = new CredentialModeFileStore();
+            var borrow = new ClaudeCredentialsFileSource();
+            var own = new OwnLoginCredentialSource(_http, tokenStore);
+            var credentials = new SelectingCredentialSource(borrow, own, modeStore);
+            var provider = new ClaudeCodeAdapter(_http, credentials);
             _monitor = new UsageMonitor(provider);
-            _controller = new TrayController(_monitor);
+
+            IWidgetLogin LoginFactory(ICodeEntry codeEntry) => new WidgetLogin(
+                _http!, tokenStore, new SystemBrowserLauncher(), new HttpLoopbackListenerFactory(), codeEntry);
+
+            _controller = new TrayController(_monitor, modeStore, tokenStore, LoginFactory);
             _monitor.Start();
 
             desktop.Exit += (_, _) =>

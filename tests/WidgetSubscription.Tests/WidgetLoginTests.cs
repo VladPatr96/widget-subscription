@@ -233,11 +233,33 @@ public sealed class WidgetLoginTests
         Assert.Null(store.Load());
     }
 
+    [Fact]
+    public async Task Manual_entry_request_abandons_loopback_and_uses_paste()
+    {
+        var browser = new FakeBrowser();
+        var listener = new FakeLoopbackListener(async ct =>
+        {
+            await Task.Delay(Timeout.Infinite, ct);   // never returns until the wait is cancelled
+            throw new InvalidOperationException("unreachable");
+        });
+        var codeEntry = new ManualCodeEntry(requestNow: true, pasted: "manual-code");
+        var handler = new ExchangeHandler(HttpStatusCode.OK, TokenJson());
+        var login = Build(new InMemoryStore(), browser, new FakeLoopbackFactory(listener), codeEntry, handler);
+
+        var result = await login.LoginAsync(CancellationToken.None);
+
+        Assert.IsType<LoginResult.Success>(result);
+        Assert.Equal(1, codeEntry.Calls);            // fell through to paste
+        Assert.Equal(2, browser.Opened.Count);       // loopback URL, then hosted URL
+        using var body = JsonDocument.Parse(handler.LastBody!);
+        Assert.Equal("manual-code", body.RootElement.GetProperty("code").GetString());
+    }
+
     // --- helpers ---------------------------------------------------------
 
     private static WidgetLogin Build(
         InMemoryStore store, FakeBrowser browser, FakeLoopbackFactory factory,
-        FakeCodeEntry codeEntry, ExchangeHandler handler,
+        ICodeEntry codeEntry, ExchangeHandler handler,
         TimeProvider? time = null, TimeSpan? timeout = null)
         => new(new HttpClient(handler), store, browser, factory, codeEntry, time ?? new FakeTimeProvider(Now), timeout);
 
@@ -300,6 +322,25 @@ public sealed class WidgetLoginTests
         {
             Calls++;
             return _prompt(ct);
+        }
+    }
+
+    private sealed class ManualCodeEntry : ICodeEntry, IManualEntrySignal
+    {
+        private readonly string? _pasted;
+        private readonly CancellationTokenSource _manual = new();
+        public ManualCodeEntry(bool requestNow, string? pasted)
+        {
+            _pasted = pasted;
+            if (requestNow)
+                _manual.Cancel();
+        }
+        public int Calls { get; private set; }
+        public CancellationToken ManualEntryRequested => _manual.Token;
+        public Task<string?> PromptAsync(CancellationToken ct)
+        {
+            Calls++;
+            return Task.FromResult(_pasted);
         }
     }
 

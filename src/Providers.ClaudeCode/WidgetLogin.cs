@@ -73,7 +73,8 @@ public sealed class WidgetLogin : IWidgetLogin
         _browser.Open(BuildAuthorizeUrl(listener.RedirectUri, pkce, hostedPaste: false));
 
         using var timeoutCts = new CancellationTokenSource(_timeout, _time);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
+        var manual = (_codeEntry as IManualEntrySignal)?.ManualEntryRequested ?? CancellationToken.None;
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token, manual);
         LoopbackCallback callback;
         try
         {
@@ -83,7 +84,7 @@ public sealed class WidgetLogin : IWidgetLogin
         {
             if (ct.IsCancellationRequested)
                 throw;      // user cancel ⇒ surface as Cancelled
-            return null;    // timeout ⇒ fall back to paste
+            return null;    // timeout or user-requested manual entry ⇒ fall back to paste
         }
 
         if (!string.IsNullOrEmpty(callback.Error) || string.IsNullOrEmpty(callback.Code))
